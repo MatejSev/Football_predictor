@@ -2,7 +2,7 @@ import { BASE_URL } from '../../../constants/index.js';
 import { openPageAndNavigate, waitAndClick, waitForSelectorSafe } from '../../index.js';
 
 export const getMatchIdList = async (browser, leagueSeasonUrl, statsType = 'all') => {
-  if (statsType === 'all') {c
+  if (statsType === 'all') {
     const page = await openPageAndNavigate(browser, `${leagueSeasonUrl}/results`);
 
     while (true) {
@@ -102,6 +102,34 @@ export const getMatchData = async (browser, matchId, statsType = 'all') => {
     await page.close();
     return { ...matchData, information, statistics, lineups };
   } else if (statsType === 'teamRatings') {
+    // 1️⃣ Načtení základních informací o zápase
+    const summaryPage = await openPageAndNavigate(browser, `${BASE_URL}/match/${matchId}/#/match-summary/match-summary`);
+    await waitForSelectorSafe(summaryPage, '.duelParticipant__startTime');
+    await waitForSelectorSafe(summaryPage, "div[data-testid='wcl-summaryMatchInformation'] > div");
+
+    const matchInfo = await summaryPage.evaluate(() => {
+      const homeName = document.querySelector('.duelParticipant__home .participant__participantName.participant__overflow')?.innerText.trim() || null;
+      const awayName = document.querySelector('.duelParticipant__away .participant__participantName.participant__overflow')?.innerText.trim() || null;
+
+      const infoElements = Array.from(document.querySelectorAll("div[data-testid='wcl-summaryMatchInformation'] > div"));
+      let venue = null;
+      let referee = null;
+
+      for (let i = 0; i < infoElements.length; i += 2) {
+        const key = infoElements[i]?.innerText.trim().toLowerCase();
+        const value = infoElements[i + 1]?.innerText.trim();
+        if (key.includes("venue")) venue = value;
+        if (key.includes("referee")) referee = value;
+      }
+
+      return {
+        homeName,
+        awayName,
+        venue,
+        referee
+      };
+    });
+    await summaryPage.close();
     const page = await openPageAndNavigate(browser, `${BASE_URL}/match/${matchId}/#/match-summary/lineups`);
     await waitForSelectorSafe(page, "div[data-testid='wcl-lineups']");
 
@@ -224,6 +252,11 @@ export const getMatchData = async (browser, matchId, statsType = 'all') => {
     await page.close();
 
     return {
+      players: playersWithRatings,
+      homeName: matchInfo.homeName,
+      awayName: matchInfo.awayName,
+      venue: matchInfo.venue,
+      referee: matchInfo.referee,
       homeTeamAverageRating: parseFloat(homeAvg),
       awayTeamAverageRating: parseFloat(awayAvg),
       players: playersWithRatings // volitelné, můžeš si nechat pro detail
