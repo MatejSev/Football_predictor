@@ -8,6 +8,7 @@ from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, TensorDataset
 import warnings
+import json
 warnings.filterwarnings('ignore')
 
 class FootballLSTM(nn.Module):
@@ -283,7 +284,7 @@ def main():
     Hlavní funkce - ukázka použití
     """
     # Cesta k adresáři s daty
-    data_dir = r'.\scrapper\FlashscoreScraping\src\data'
+    data_dir = r'.\FlashscoreScraping\src\data'
 
     # Seznam souborů, které začínají 'england_premier_league'
     csv_files = [f for f in os.listdir(data_dir) if f.startswith('england_premier_league') and f.endswith('.csv')]
@@ -328,25 +329,47 @@ def main():
         input_size=num_features, num_epochs=50
     )
 
-    # --- 6. Predikce pomocí falešných dat ---
-    stub = create_feature_stub(
-        label_encoders,
-        processed_df,
-        home_name='Arsenal',
-        away_name='Liverpool',
-        referee='Taylor A. (Eng)',
-        venue='Emirates Stadium (London)',
-        home_rating=7.2,
-        away_rating=7.2
-    )
+    file_path = os.path.join(data_dir, 'england_premier_league_2025_2026.json')
+    # Načíst JSON
+    with open(file_path, 'r', encoding='utf-8') as f:
+        matches = json.load(f)
+    
+    # Pro každý zápas
+    for match_id, match_data in matches.items():
+        home_name = match_data.get("homeName", "").replace("\n", " ").strip()
+        away_name = match_data.get("awayName", "").replace("\n", " ").strip()
+        referee = match_data.get("referee", "").replace("\n", " ").strip()
+        venue = match_data.get("venue", "").replace("\n", " ").strip()
+        home_rating = match_data.get("homeTeamAverageRating", None)
+        away_rating = match_data.get("awayTeamAverageRating", None)
+        print(f"  Home: {home_name}")
+        print(f"  Away: {away_name}")
+        print(f"  Referee: {referee}")
+        print(f"  Venue: {venue}")
+        print(f"  Home Rating: {home_rating}")
+        print(f"  Away Rating: {away_rating}")
+        print("-" * 50)
 
-    predicted_class, probabilities = predict_from_stub(
-        model, stub, scaler, device='cuda' if torch.cuda.is_available() else 'cpu'
-    )
-
-    print("⚽ Predikce zápasu:")
-    print("Výsledek (0=remíza, 1=domácí, 2=hosté):", predicted_class)
-    print("Pravděpodobnosti [remíza, domácí, hosté]:", probabilities)
+        # --- Predikce ---
+        
+        stub = create_feature_stub(
+            label_encoders,
+            processed_df,
+            home_name=home_name,
+            away_name=away_name,
+            referee=referee,
+            venue=venue,
+            home_rating=home_rating,
+            away_rating=away_rating
+        )
+    
+        predicted_class, probabilities = predict_from_stub(
+            model, stub, scaler, device='cuda' if torch.cuda.is_available() else 'cpu'
+        )
+        print("⚽ Predikce zápasu:")
+        print("Výsledek (0=remíza, 1=domácí, 2=hosté):", predicted_class)
+        print("Pravděpodobnosti [remíza, domácí, hosté]:", probabilities)
+        print("\n")
 
 if __name__ == "__main__":
     main()
